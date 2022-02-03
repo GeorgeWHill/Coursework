@@ -1,0 +1,259 @@
+import re
+import sys
+import sqlite3 as lite
+import hashlib
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import QSize
+from datetime import datetime
+
+## GeorgeH login GeorgeH!
+
+member = ("1")
+times = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
+db="coursework.db"
+con = lite.connect(db); cur = con.cursor()
+
+class LoginWindow(QtWidgets.QWidget):
+
+    switch_window = QtCore.pyqtSignal()
+
+    def __init__(self):
+        QMainWindow.__init__(self)
+
+        self.setMinimumSize(QSize(300, 240))    
+        self.setWindowTitle("Login Window") 
+
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('Username:')
+        self.nameLabel.move(20, 20)
+
+        self.userinp = QLineEdit(self)
+        self.userinp.move(80, 20)
+        self.userinp.resize(200, 32)
+
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('Password:')
+        self.nameLabel.move(20, 60)
+
+        self.passinp = QLineEdit(self)
+        self.passinp.move(80, 60)
+        self.passinp.resize(200, 32)
+
+        self.alertlabel = QLabel(self)
+        self.alertlabel.setText("")
+        self.alertlabel.move(20,100)
+        self.alertlabel.resize(280,20)
+
+        pybutton = QPushButton('Enter', self)
+        pybutton.clicked.connect(self.clickOk)
+        pybutton.resize(200,32)
+        pybutton.move(80, 140)
+
+        pybutton = QPushButton('Create New User', self)
+        pybutton.clicked.connect(self.clickCreate)
+        pybutton.resize(200,32)
+        pybutton.move(80, 180)
+
+    def clickCreate(self):
+        password = self.passinp.text()
+        if len(password) < 8:
+            self.alertlabel.setText("Password length must be greater than 8")
+        elif len(password) > 18:
+            self.alertlabel.setText("Password length must be less than 18")
+        elif re.search('[0-9]',password) is None:
+            self.alertlabel.setText("Password must contain a number")
+        elif re.search('[A-Z]',password) is None: 
+            self.alertlabel.setText("Password must contain a capital letter")
+        else:
+            self.alertlabel.setText("Password is valid")
+        getDuplicates = ("SELECT * FROM Users WHERE Username=?")
+        uname = self.userinp.text()
+        cur.execute(getDuplicates, (uname,))
+        dupelist = cur.fetchall()
+        if len(dupelist) > 0:
+            self.alertlabel.setText("A user with that name already exists.")
+            return None
+        m = hashlib.sha512()
+        password = password.encode()
+        m.update(password)
+        hashedpassword = m.hexdigest()
+        makeUser = ("INSERT INTO Users VALUES (NULL,?,?)")
+        cur.execute(makeUser, (uname, hashedpassword,))
+        con.commit()
+        
+    def clickOk(self):
+        m = hashlib.sha512()
+        password = self.passinp.text()
+        password = password.encode()
+        m.update(password)
+        hashedpassword = m.hexdigest()
+        print(hashedpassword)
+        ## The above code converts the password entered into the text box into a hash using the sha512 algorithm.
+        username = self.userinp.text()
+        print(username)
+        getUser = ("SELECT Password FROM Users WHERE Username=?")
+        cur.execute(getUser, (username,))
+        user = cur.fetchall()
+        convert = [i[0] for i in user]
+        if len(convert) != 0:
+            if convert[0] == hashedpassword:
+                print("Success")
+                currentUser=self.userinp.text()
+                print(currentUser)
+                getUserID = ("SELECT UserID FROM Users WHERE Username=?")
+                cur.execute(getUserID, (username,))
+                UserIDlist = cur.fetchall()
+                UserIDlistconverted = [i[0] for i in UserIDlist]
+                UserID = UserIDlistconverted[0]
+                getMemberID = ("SELECT MemberID FROM Members WHERE UserID = ?")
+                cur.execute(getMemberID, (UserID,))
+                MemberIDl = cur.fetchall()
+                MemberIDc = [i[0] for i in UserIDlist]
+                global MemberID
+                MemberID = MemberIDc[0]
+                self.switch_window.emit()
+            else:
+                self.alertlabel.setText("Wrong password")
+        else:
+            self.alertlabel.setText("No such user")
+
+
+class WindowThree(QtWidgets.QWidget):
+
+    def __init__(self, text):
+        QtWidgets.QWidget.__init__(self)
+        self.setWindowTitle('Window Three')
+
+        self.label = QtWidgets.QLabel(text)
+
+        self.button = QtWidgets.QPushButton('Close')
+        self.button.clicked.connect(self.close)
+
+
+class BookingWindow(QtWidgets.QWidget):
+
+    switch_window = QtCore.pyqtSignal(str)
+
+    def __init__(self):
+        QMainWindow.__init__(self)
+        self.setMinimumSize(QSize(500,500))
+        self.setWindowTitle("Booking Organiser")
+
+        self.Calendar = QCalendarWidget(self)
+        self.Calendar.move(20,20)
+        self.Calendar.resize(350,250)
+        self.Calendar.setMinimumDate(self.Calendar.selectedDate())
+
+        self.TimeSlotStart = QComboBox(self)
+        self.TimeSlotStart.move(20,280)
+        self.TimeSlotStart.addItems(times)
+
+        self.TimeSlotEnd = QComboBox(self)
+        self.TimeSlotEnd.move(20,320)
+        self.TimeSlotEnd.addItems(times)
+
+        self.ActivitySelector = QComboBox(self)
+        self.ActivitySelector.move(150,280)
+        getActivities = ("SELECT ActivityDescription FROM Activities")
+        cur.execute(getActivities)
+        activities = cur.fetchall()
+        print(activities)
+        activitylist = [i[0] for i in activities]
+        self.ActivitySelector.addItems(activitylist)
+
+        self.Enterbox=QPushButton(self)
+        self.Enterbox.move(20,360)
+        self.Enterbox.setText("Confirm Booking")
+        self.Enterbox.resize(300,20)
+        self.Enterbox.clicked.connect(self.CreateBooking)
+
+        self.Next = QPushButton("Next Window", self)
+        self.Next.resize(100,20)
+        self.Next.move(20,390)
+        self.Next.clicked.connect(self.switch)
+
+        deleteOld = ("DELETE FROM Bookings WHERE DateOfBooking < CURRENT_DATE") ##These two lines delete bookings that are for before today from the bookings table.
+        cur.execute(deleteOld)
+
+
+    def CreateBooking(self): ## This section needs to take the data selected in the booking window and add that to the database.
+        StartTime = str(self.TimeSlotStart.currentText())
+        EndTime = str(self.TimeSlotEnd.currentText())
+        SelectedActivity = str(self.ActivitySelector.currentText())
+        ## Grabs data from the UI.
+        if StartTime == EndTime or StartTime > EndTime:
+            print("Please select an end time after the start time.")
+            return None
+        ## Validates that the end time is after the start time. 
+        date = str(self.Calendar.selectedDate().toPyDate())
+        getDuplicateDates = ("SELECT * FROM Bookings WHERE (DateOfBooking = ? AND MemberID = ? AND TimeStart <= ? AND TimeEnd >= ?)")
+        cur.execute(getDuplicateDates, (date, MemberID, StartTime, EndTime))
+        Duplicates = cur.fetchall()
+        print(Duplicates)
+        if len(Duplicates) > 0:
+            print("1")
+            overwritedupe = str(input("You're already booked for that time slot. Would you like to overwrite that slot? Y/N"))
+            if overwritedupe == "N":
+                return None
+            elif overwritedupe =="Y":
+                print("Overwrite")
+            else:
+                print("Please answer Y/N.")
+                return None
+        getDescToId = ("SELECT ActivityID FROM Activities WHERE ActivityDescription = ?")
+        cur.execute(getDescToId, (SelectedActivity,))
+        ActIDlist = cur.fetchall()
+        ActID = [i[0] for i in ActIDlist]
+        print(ActID)
+        getDuplicateDates = ("SELECT * FROM Bookings WHERE DateOfBooking = ? AND ActivityID = ?")
+        cur.execute(getDuplicateDates, (date, ActID[0]))
+        Duplicates = cur.fetchall()
+        getCapacity = ("SELECT Capacity FROM Activities WHERE ActivityDescription = ?")
+        cur.execute(getCapacity, (SelectedActivity,))
+        CapacityList = cur.fetchall()
+        print(CapacityList)
+        capacity = [i[0] for i in CapacityList]
+        if len(Duplicates) > capacity[0]:
+            print("Sorry, that activity is fully booked for this day")
+        createquer = ("INSERT INTO Bookings (MemberID, DateOfBooking, TimeStart, TimeEnd, ActivityID) VALUES (?,?,?,?,?)")
+        cur.execute(createquer, (MemberID, date, StartTime, EndTime, ActID[0]))
+        con.commit()
+
+
+    def switch(self):
+        self.switch_window.emit(self.ActivitySelector.currentText())
+
+class Controller:
+
+    def __init__(self):
+        pass
+
+    def show_login(self):
+        self.login = LoginWindow()
+        self.login.switch_window.connect(self.show_Booking)
+        self.login.show()
+
+    def show_Booking(self):
+        self.window = BookingWindow()
+        self.window.switch_window.connect(self.show_window_three)
+        self.login.close()
+        self.window.show()
+
+    def show_window_three(self, text):
+        self.window_three = WindowThree(text)
+        self.window.close()
+        self.window_three.show()
+
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+    controller = Controller()
+    controller.show_login()
+    sys.exit(app.exec_())
+    db.close()
+
+
+if __name__ == '__main__':
+    main()
+
