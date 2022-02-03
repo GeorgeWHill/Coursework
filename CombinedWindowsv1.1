@@ -1,0 +1,263 @@
+import sys
+import sqlite3 as lite
+import hashlib
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import QSize, QDate, QTime
+from datetime import datetime
+
+member = ("1")
+times = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
+db="coursework.db"
+con = lite.connect(db); cur = con.cursor()
+
+class LoginWindow(QtWidgets.QWidget):
+
+    switch_window = QtCore.pyqtSignal()
+
+    def __init__(self):
+        QMainWindow.__init__(self)
+
+        self.setMinimumSize(QSize(300, 200))    
+        self.setWindowTitle("Login Window") 
+
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('Username:')
+        self.userinp = QLineEdit(self)
+
+        self.userinp.move(80, 20)
+        self.userinp.resize(200, 32)
+        self.nameLabel.move(20, 20)
+
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('Password:')
+        self.passinp = QLineEdit(self)
+
+        self.passinp.move(80, 60)
+        self.passinp.resize(200, 32)
+        self.nameLabel.move(20, 60)
+
+        pybutton = QPushButton('Enter', self)
+        pybutton.clicked.connect(self.clickOk)
+        pybutton.resize(200,32)
+        pybutton.move(80, 100)
+
+        pybutton = QPushButton('Create', self)
+        pybutton.clicked.connect(self.clickCreate)
+        pybutton.resize(200,32)
+        pybutton.move(80, 140)
+
+    def clickCreate(self):
+        getDuplicates = ("SELECT * FROM Users WHERE Username=?")
+        uname = self.userinp.text()
+        cur.execute(getDuplicates, (uname,))
+        dupelist = cur.fetchall()
+        if len(dupelist) > 0:
+            print("A user with that name already exists.")
+            return None
+        m = hashlib.sha512()
+        password = self.passinp.text()
+        password = password.encode()
+        m.update(password)
+        hashedpassword = m.hexdigest()
+        makeUser = ("INSERT INTO Users VALUES (NULL,?,?)")
+        cur.execute(makeUser, (uname, hashedpassword,))
+        con.commit()
+        
+    def clickOk(self):
+        m = hashlib.sha512()
+        password = self.passinp.text()
+        password = password.encode()
+        m.update(password)
+        hashedpassword = m.hexdigest()
+        print(hashedpassword)
+        ## The above code converts the password entered into the text box into a hash using the sha512 algorithm.
+        username = self.userinp.text()
+        print(username)
+        getUser = ("SELECT Password FROM Users WHERE Username=?")
+        cur.execute(getUser, (username,))
+        user = cur.fetchall()
+        convert = [i[0] for i in user]
+        if len(convert) != 0:
+            if convert[0] == hashedpassword:
+                print("Success")
+                currentUser=self.userinp.text()
+                print(currentUser)
+                getUserID = ("SELECT UserID FROM Users WHERE Username=?")
+                cur.execute(getUserID, (username,))
+                UserIDlist = cur.fetchall()
+                UserIDlistconverted = [i[0] for i in UserIDlist]
+                UserID = UserIDlistconverted[0]
+                getMemberID = ("SELECT MemberID FROM Members WHERE UserID = ?")
+                cur.execute(getMemberID, (UserID,))
+                MemberIDl = cur.fetchall()
+                MemberIDc = [i[0] for i in UserIDlist]
+                global MemberID
+                MemberID = MemberIDc[0]
+                self.switch_window.emit()
+            else:
+                print("Wrong password")
+        else:
+            print("No such user")
+
+
+class WindowThree(QtWidgets.QWidget):
+
+    def __init__(self, text):
+        QtWidgets.QWidget.__init__(self)
+        self.setWindowTitle('Window Three')
+
+        self.label = QtWidgets.QLabel(text)
+
+        self.button = QtWidgets.QPushButton('Close')
+        self.button.clicked.connect(self.close)
+
+
+class BookingWindow(QtWidgets.QWidget):
+
+    switch_window = QtCore.pyqtSignal(str)
+
+    def __init__(self):
+        QMainWindow.__init__(self)
+        self.setMinimumSize(QSize(760,500))
+        self.setWindowTitle("Booking Organiser")
+
+        self.StartCalendar = QCalendarWidget(self)
+        self.StartCalendar.selectionChanged.connect(self.ChangeStartDate)
+        self.StartCalendar.setMinimumDate(QDate.currentDate())
+        self.StartCalendar.move(20,20)
+        self.StartCalendar.resize(350,250)
+
+        self.EndCalendar = QCalendarWidget(self)
+        self.EndCalendar.selectionChanged.connect(self.ChangeEndDate)
+        self.EndCalendar.setMinimumDate(QDate.currentDate())
+        self.EndCalendar.move(390,20)
+        self.EndCalendar.resize(350,250)
+
+        self.DateStart = QDateTimeEdit(self)
+        self.DateStart.setDisplayFormat("dd MM yyyy hh:mm")
+        self.DateStart.move(20,280)
+        self.DateStart.setMinimumDate(QDate.currentDate())
+        self.DateStart.hide()
+
+        self.DateEnd = QDateTimeEdit(self)
+        self.DateEnd.setDisplayFormat("dd MM yyyy hh:mm")
+        self.DateEnd.move(20,320)
+        self.DateEnd.setMinimumDate(QDate.currentDate())
+        self.DateEnd.hide()
+
+        self.TimeSlotStart = QTimeEdit(self)
+        self.TimeSlotStart.timeChanged.connect(self.ChangeStartTime)
+        self.TimeSlotStart.resize(350,20)
+        self.TimeSlotStart.move(20,270)
+        time = QTime(9,0)
+        self.TimeSlotStart.setMinimumTime(time)
+
+        self.TimeSlotEnd = QTimeEdit(self)
+        self.TimeSlotEnd.timeChanged.connect(self.ChangeEndTime)
+        self.TimeSlotEnd.move(390,270)
+        self.TimeSlotEnd.resize(350,20)
+        time = QTime(9,0)
+        self.TimeSlotEnd.setMinimumTime(time)
+
+        self.ActivitySelector = QComboBox(self)
+        self.ActivitySelector.move(150,300)
+        getActivities = ("SELECT ActivityDescription FROM Activities")
+        cur.execute(getActivities)
+        activities = cur.fetchall()
+        print(activities)
+        activitylist = [i[0] for i in activities]
+        self.ActivitySelector.addItems(activitylist)
+
+        self.Enterbox=QPushButton(self)
+        self.Enterbox.move(20,360)
+        self.Enterbox.setText("Confirm Booking")
+        self.Enterbox.resize(300,20)
+        self.Enterbox.clicked.connect(self.CreateBooking)
+
+        self.Next = QPushButton("Next Window", self)
+        self.Next.resize(100,20)
+        self.Next.move(20,390)
+        self.Next.clicked.connect(self.switch)
+
+        ##deleteOld = ("DELETE FROM Bookings WHERE DateOfBooking < CURRENT_DATE") ##These two lines delete bookings that are for before today from the bookings table.
+        ##cur.execute(deleteOld)
+
+    def ChangeStartDate(self):
+        NewDate = self.StartCalendar.selectedDate()
+        self.DateStart.setDate(NewDate)
+        print(self.DateStart.date())
+
+    def ChangeEndDate(self):
+        NewDate = self.EndCalendar.selectedDate()
+        self.DateEnd.setDate(NewDate)
+        print(self.DateEnd.date())
+
+    def ChangeStartTime(self):
+        NewTime = self.TimeSlotStart.time()
+        self.DateStart.setTime(NewTime)
+        print(self.DateStart.time())
+
+    def ChangeEndTime(self):
+        NewTime = self.TimeSlotEnd.time()
+        self.DateEnd.setTime(NewTime)
+        print(self.DateEnd.time())
+
+
+    def CreateBooking(self): ## This section needs to take the data selected in the booking window and add that to the database.
+        StartTime = self.DateStart.dateTime()
+        EndTime = self.DateEnd.dateTime()
+        SelectedActivity = str(self.ActivitySelector.currentText())
+        ## Grabs data from the UI.
+        if StartTime == EndTime or StartTime > EndTime:
+            print("Please select an end time after the start time.")
+            return None
+        ## Validates that the end time is after the start time. 
+        getDescToId = ("SELECT ActivityID FROM Activities WHERE ActivityDescription = ?")
+        cur.execute(getDescToId, (SelectedActivity,))
+        ActIDlist = cur.fetchall()
+        ActID = [i[0] for i in ActIDlist]
+        print(ActID)
+        createquer = ("INSERT INTO Bookings (MemberID, TimeStart, TimeEnd, ActivityID) VALUES (?,?,?,?)")
+        startstring = self.DateStart.toString(TextDate)
+        endstring = self.DateEnd.toString(TextDate)
+        cur.execute(createquer, (str(MemberID), str(startstring), str(endstring), str(ActID[0])))
+        con.commit()
+
+
+    def switch(self):
+        self.switch_window.emit(self.ActivitySelector.currentText())
+
+class Controller:
+
+    def __init__(self):
+        pass
+
+    def show_login(self):
+        self.login = LoginWindow()
+        self.login.switch_window.connect(self.show_Booking)
+        self.login.show()
+
+    def show_Booking(self):
+        self.window = BookingWindow()
+        self.window.switch_window.connect(self.show_window_three)
+        self.login.close()
+        self.window.show()
+
+    def show_window_three(self, text):
+        self.window_three = WindowThree(text)
+        self.window.close()
+        self.window_three.show()
+
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+    controller = Controller()
+    controller.show_login()
+    sys.exit(app.exec_())
+    db.close()
+
+
+if __name__ == '__main__':
+    main()
+
